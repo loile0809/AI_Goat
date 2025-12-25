@@ -1,0 +1,20 @@
+{"id": "sum_sq", "pass": false, "score": 0.0, "latency_ms": 5499.602399999276, "error": "ExecError: IndentationError: expected an indented block after 'for' statement on line 3 (<string>, line 4)"}
+{"id": "sum_n", "pass": false, "score": 0.0, "latency_ms": 5931.3795999623835, "error": "ExecError: IndentationError: expected an indented block after 'for' statement on line 3 (<string>, line 4)"}
+{"id": "factorial", "pass": true, "score": 0.0, "latency_ms": 7382.886900100857, "error": ""}
+{"id": "fib", "pass": false, "score": 0.0, "latency_ms": 8896.322799962945, "error": "ExecError: IndentationError: expected an indented block after 'if' statement on line 2 (<string>, line 3)"}
+{"id": "is_prime", "pass": false, "score": 0.0, "latency_ms": 6030.051399953663, "error": "ExecError: IndentationError: expected an indented block after 'for' statement on line 4 (<string>, line 5)"}
+{"id": "pal", "pass": false, "score": 0.0, "latency_ms": 9099.088000017218, "error": "ExecError: IndentationError: expected an indented block after 'if' statement on line 2 (<string>, line 3)"}
+{"id": "sort", "pass": true, "score": 0.0, "latency_ms": 6065.997799974866, "error": ""}
+{"id": "gcd", "pass": false, "score": 0.0, "latency_ms": 4349.456399912015, "error": "ExecError: IndentationError: expected an indented block after 'if' statement on line 2 (<string>, line 3)"}
+{"id": "lcm", "pass": false, "score": 0.0, "latency_ms": 4349.005999974906, "error": "ExecError: IndentationError: expected an indented block after 'while' statement on line 2 (<string>, line 3)"}
+{"id": "count", "pass": false, "score": 0.0, "latency_ms": 5899.100200040266, "error": "ExecError: IndentationError: expected an indented block after 'for' statement on line 2 (<string>, line 3)"}
+{"id": "clamp", "pass": false, "score": 0.0, "latency_ms": 4530.465799965896, "error": "ExecError: SyntaxError: '(' was never closed (<string>, line 8)"}
+{"id": "avg", "pass": false, "score": 0.0, "latency_ms": 4880.447100033052, "error": "ExecError: IndentationError: expected an indented block after 'if' statement on line 3 (<string>, line 4)"}
+{"id": "rev", "pass": true, "score": 0.0, "latency_ms": 4519.862900022417, "error": ""}
+{"id": "uniq", "pass": false, "score": 0.0, "latency_ms": 9012.15039996896, "error": "ExecError: IndentationError: expected an indented block after 'for' statement on line 5 (<string>, line 6)"}
+{"id": "max", "pass": false, "score": 0.0, "latency_ms": 8962.923899991438, "error": "ExecError: IndentationError: expected an indented block after 'if' statement on line 2 (<string>, line 3)"}
+{"id": "min", "pass": true, "score": 0.0, "latency_ms": 9187.343299970962, "error": ""}
+{"id": "len", "pass": false, "score": 0.0, "latency_ms": 7552.3630999960005, "error": "NameError: name 'lst' is not defined"}
+{"id": "even", "pass": false, "score": 0.0, "latency_ms": 9020.463100052439, "error": "RecursionError: maximum recursion depth exceeded"}
+{"id": "abs", "pass": false, "score": 0.0, "latency_ms": 7399.944000062533, "error": "NameError: name 'exponential_fn' is not defined"}
+{"id": "pow2", "pass": true, "score": 0.0, "latency_ms": 4822.354600066319, "error": ""}

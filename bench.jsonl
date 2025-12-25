@@ -1,0 +1,20 @@
+{"id":"sum_sq","function_name":"sum_of_squares","signature":"(n)","docstring":"Return the sum of squares from 1 to n inclusive.","checker":"sum_sq_v1"}
+{"id":"sum_n","function_name":"sum_n","signature":"(n)","docstring":"Return the sum of integers from 1 to n inclusive.","checker":"sum_n_v1"}
+{"id":"factorial","function_name":"factorial","signature":"(n)","docstring":"Return n factorial.","checker":"factorial_v1"}
+{"id":"fib","function_name":"fibonacci","signature":"(n)","docstring":"Return the nth Fibonacci number.","checker":"fib_v1"}
+{"id":"is_prime","function_name":"is_prime","signature":"(n)","docstring":"Return True if n is a prime number.","checker":"is_prime_v1"}
+{"id":"pal","function_name":"is_palindrome","signature":"(s)","docstring":"Return True if s is a palindrome.","checker":"pal_v1"}
+{"id":"sort","function_name":"sort_list","signature":"(arr)","docstring":"Return the list sorted in ascending order.","checker":"sort_v1"}
+{"id":"gcd","function_name":"gcd","signature":"(a, b)","docstring":"Return the greatest common divisor of a and b.","checker":"gcd_v1"}
+{"id":"lcm","function_name":"lcm","signature":"(a, b)","docstring":"Return the least common multiple of a and b.","checker":"lcm_v1"}
+{"id":"count","function_name":"count_occurrences","signature":"(x, arr)","docstring":"Return the number of times x appears in arr.","checker":"count_v1"}
+{"id":"clamp","function_name":"clamp","signature":"(x, lo, hi)","docstring":"Clamp x to the range [lo, hi].","checker":"clamp_v1"}
+{"id":"avg","function_name":"average","signature":"(arr)","docstring":"Return the average of numbers in arr.","checker":"avg_v1"}
+{"id":"rev","function_name":"reverse_string","signature":"(s)","docstring":"Return the reverse of string s.","checker":"rev_v1"}
+{"id":"uniq","function_name":"unique","signature":"(arr)","docstring":"Return a list of unique elements in arr preserving order.","checker":"uniq_v1"}
+{"id":"max","function_name":"max_element","signature":"(arr)","docstring":"Return the maximum element in arr.","checker":"max_v1"}
+{"id":"min","function_name":"min_element","signature":"(arr)","docstring":"Return the minimum element in arr.","checker":"min_v1"}
+{"id":"len","function_name":"length","signature":"(s)","docstring":"Return the length of string s.","checker":"len_v1"}
+{"id":"even","function_name":"is_even","signature":"(n)","docstring":"Return True if n is even.","checker":"even_v1"}
+{"id":"abs","function_name":"absolute","signature":"(n)","docstring":"Return the absolute value of n.","checker":"abs_v1"}
+{"id":"pow2","function_name":"power2","signature":"(n)","docstring":"Return 2 raised to the power n.","checker":"pow2_v1"}
