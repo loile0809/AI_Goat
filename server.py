@@ -42,10 +42,10 @@ PRESET_FAST = dict(
 )
 
 PRESET_QUALITY = dict(
-    n_candidates=24, tries=2, max_new_tokens=200,
+    n_candidates=12, tries=1, max_new_tokens=200,
     temperature=0.75, top_p=0.92,
     timeout_s=3.0, repeats=2, probe_cases=8,
-    accept_score=90.0, max_rounds=3,
+    accept_score=90.0, max_rounds=2,
 )
 
 def _prompt(req: SolveRequest, extra: str = "") -> str:

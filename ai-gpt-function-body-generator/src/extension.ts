@@ -27,7 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("ai-gpt.generateFunctionBody", async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) {return;}
+      if (!editor) { return; }
 
       const doc = editor.document;
       if (doc.languageId !== "python") {
@@ -48,8 +48,13 @@ export function activate(context: vscode.ExtensionContext) {
       });
 
       const mode: Mode = (picked ?? defaultMode) as Mode;
+      output.appendLine("[DBG] lang=" + editor.document.languageId);
+      output.appendLine("[DBG] cursorLine=" + editor.selection.active.line);
+      output.appendLine("[DBG] cursorText=" + editor.document.lineAt(editor.selection.active.line).text);
+      output.show(true);
 
-      const parsed = parsePythonFunctionAtCursor(editor);
+
+      const parsed = parsePythonFunctionAtCursor(editor, output);
       if (!parsed) {
         vscode.window.showErrorMessage(
           "Put cursor inside a Python function (def ...) with signature/docstring."
@@ -102,8 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
         const tTotal = res.timing?.t_total_ms;
 
         vscode.window.showInformationMessage(
-          `Generated ${functionName} • score=${
-            score ?? "?"
+          `Generated ${functionName} • score=${score ?? "?"
           } • warnings=${warnCount} • ${tTotal ? `${tTotal.toFixed(0)}ms` : ""}`
         );
 
@@ -118,8 +122,7 @@ export function activate(context: vscode.ExtensionContext) {
             output.appendLine(`- ${w.code ?? "WARN"}: ${w.message ?? ""}`);
           }
         }
-        if (res.timing)
-          {output.appendLine("timing: " + JSON.stringify(res.timing));}
+        if (res.timing) { output.appendLine("timing: " + JSON.stringify(res.timing)); }
         output.appendLine("");
         output.show(true);
       } catch (e: any) {
@@ -145,7 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 }
 
-export function deactivate() {}
+export function deactivate() { }
 
 async function callSolveApi(
   url: string,
@@ -177,7 +180,10 @@ async function callSolveApi(
  * Parse function at cursor.
  * Returns signature EXACTLY in the format backend expects: "(...)" possibly with " -> ..."
  */
-function parsePythonFunctionAtCursor(editor: vscode.TextEditor): null | {
+function parsePythonFunctionAtCursor(
+  editor: vscode.TextEditor,
+  output?: vscode.OutputChannel
+): null | {
   functionName: string;
   signature: string;
   docstring: string;
@@ -189,14 +195,22 @@ function parsePythonFunctionAtCursor(editor: vscode.TextEditor): null | {
 
   // 1) find def line upwards
   let defLine = -1;
+  const defRegex = /^\s*(async\s+def|def)\s+(\w+)\s*\(/;
+
   for (let i = cursorLine; i >= 0; i--) {
     const t = doc.lineAt(i).text;
-    if (/^\s*(async\s+def|def)\s+\w+\s*\(/.test(t)) {
+    if (defRegex.test(t)) {
       defLine = i;
       break;
     }
   }
-  if (defLine < 0) {return null;}
+  if (defLine < 0) {
+    output?.appendLine(`[DBG] parse: no 'def ... (' found upwards from line ${cursorLine}`);
+    return null;
+  }
+
+  // debug
+  output?.appendLine(`[DBG] defLine=${defLine} found. function def candidate.`);
 
   // 2) collect signature lines until we hit ":" ending
   const sigLines: string[] = [];
@@ -205,29 +219,34 @@ function parsePythonFunctionAtCursor(editor: vscode.TextEditor): null | {
     const t = doc.lineAt(i).text;
     sigLines.push(t);
     endLine = i;
-    if (t.trimEnd().endsWith(":")) {break;}
-    if (i - defLine > 30) {break;} // safety
+    if (t.trimEnd().endsWith(":")) { break; }
+    if (i - defLine > 30) { break; } // safety
   }
 
   const sigBlock = sigLines.join("\n");
 
   // function name
   const m = sigBlock.match(/^\s*(?:async\s+def|def)\s+(\w+)\s*/m);
-  if (!m) {return null;}
+  if (!m) {
+    output?.appendLine(`[DBG] parse: regex match for function name failed on sigBlock:\n${sigBlock}`);
+    return null;
+  }
   const functionName = m[1];
+  output?.appendLine(`[DBG] functionName=${functionName}`);
 
   // Extract "(...)" + optional return annotation before ":"
-  // Example: def foo(a, b) -> int:
-  // We want signature = "(a, b) -> int"
-  const oneLineForExtract = sigBlock.replace(/\n/g, " ");
-  const m2 = oneLineForExtract.match(
-    new RegExp(
-      String.raw`^\s*(?:async\s+def|def)\s+${functionName}\s*([^:]+):\s*$`
-    )
-  );
-  if (!m2) {return null;}
+  // Extract signature by stripping the "def name" prefix and trailing ":"
+  const oneLineForExtract = sigBlock.replace(/\r?\n/g, " ").replace(/\s+/g, " ");
+  let cleanLine = oneLineForExtract.trim();
+  if (cleanLine.endsWith(":")) {
+    cleanLine = cleanLine.substring(0, cleanLine.length - 1).trim();
+  }
 
-  const signature = m2[1].trim(); // <-- this is what your backend expects
+  const prefixRegex = new RegExp(
+    String.raw`^\s*(?:async\s+def|def)\s+${functionName}\s*`
+  );
+  const signature = cleanLine.replace(prefixRegex, "").trim();
+  output?.appendLine(`[DBG] signature=${signature}`);
 
   // 3) docstring after signature
   const { docstring, bodyStartLine } = extractDocstring(doc, endLine + 1);
@@ -254,19 +273,19 @@ function extractDocstring(
   // skip blank/comment lines
   while (i < doc.lineCount) {
     const t = doc.lineAt(i).text.trim();
-    if (t === "" || t.startsWith("#")) {i++;}
-    else {break;}
+    if (t === "" || t.startsWith("#")) { i++; }
+    else { break; }
   }
-  if (i >= doc.lineCount) {return { docstring: "", bodyStartLine: i };}
+  if (i >= doc.lineCount) { return { docstring: "", bodyStartLine: i }; }
 
   const raw = doc.lineAt(i).text;
   const trimmed = raw.trimStart();
   const quote = trimmed.startsWith('"""')
     ? '"""'
     : trimmed.startsWith("'''")
-    ? "'''"
-    : null;
-  if (!quote) {return { docstring: "", bodyStartLine: i };}
+      ? "'''"
+      : null;
+  if (!quote) { return { docstring: "", bodyStartLine: i }; }
 
   // single-line """..."""
   if (trimmed.indexOf(quote) !== trimmed.lastIndexOf(quote)) {
@@ -289,7 +308,7 @@ function extractDocstring(
     }
     parts.push(t);
     i++;
-    if (parts.length > 200) {break;}
+    if (parts.length > 200) { break; }
   }
 
   return { docstring: parts.join("\n").trim(), bodyStartLine: i };
@@ -298,7 +317,9 @@ function extractDocstring(
 function findFirstBodyLine(doc: vscode.TextDocument, line: number): number {
   let i = line;
   while (i < doc.lineCount) {
-    if (doc.lineAt(i).text.trim() !== "") {return i;}
+    if (doc.lineAt(i).text.trim() !== "") {
+      return i;
+    }
     i++;
   }
   return Math.min(i, doc.lineCount);
@@ -309,37 +330,41 @@ function findBodyEndLine(
   startLine: number,
   defIndent: number
 ): number {
-  for (let i = startLine; i < doc.lineCount; i++) {
-    if (i === startLine) {continue;}
+  // body ends when we encounter a non-empty line with indent <= defIndent
+  for (let i = startLine + 1; i < doc.lineCount; i++) {
     const line = doc.lineAt(i);
+    const trimmed = line.text.trim();
+
+    // ignore empty lines
+    if (trimmed === "") {
+      continue;
+    }
+
     const indent = line.firstNonWhitespaceCharacterIndex;
-    const trimmed = line.text.trimStart();
 
-    const isNewTopLevel =
-      indent <= defIndent &&
-      (trimmed.startsWith("def ") ||
-        trimmed.startsWith("async def ") ||
-        trimmed.startsWith("class ") ||
-        trimmed.startsWith("@"));
-
-    if (isNewTopLevel) {return i;}
+    // Any dedent ends the function body
+    if (indent <= defIndent) {
+      return i;
+    }
   }
   return doc.lineCount;
-}
+} // ✅ CỰC QUAN TRỌNG: phải có dấu } kết thúc hàm ở đây
 
 function detectBodyIndent(editor: vscode.TextEditor, defLine: number): string {
   const doc = editor.document;
   const defIndent = doc.lineAt(defLine).text.match(/^\s*/)?.[0] ?? "";
   const tabSize = Number(editor.options.tabSize ?? 4);
 
-  if (defIndent.includes("\t")) {return defIndent + "\t";}
+  if (defIndent.includes("\t")) {
+    return defIndent + "\t";
+  }
   return defIndent + " ".repeat(tabSize);
 }
 
 function indentBlock(block: string, indent: string): string {
-  const lines = block.replace(/\r\n/g, "\n").split("\n");
-  return lines
-    .map((l) => (l.trim() === "" ? indent.trimEnd() : indent + l))
-    .join("\n")
-    .trimEnd();
+  const lines = block.split(/\r?\n/);
+  return lines.map((line) => {
+    if (!line.trim()) { return ""; }
+    return indent + line;
+  }).join("\n");
 }
