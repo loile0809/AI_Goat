@@ -81,6 +81,9 @@ def main():
 
     total = len(tasks)
 
+    # open file in append mode or write header if empty
+    # We will append line by line
+    
     for i, task in enumerate(tasks, start=1):
         tid = task.get("id", f"task_{i}")
         print(f"[{i:02d}/{total:02d}] {tid} -> requesting...", flush=True)
@@ -90,14 +93,12 @@ def main():
             "signature": task["signature"],
             "docstring": task["docstring"],
             "mode": "quality",
-
-            # override quality (nếu server cho phép)
-            "n_candidates": 24,
-            "tries": 2,
-            "max_new_tokens": 220,
-            "temperature": 0.75,
-            "top_p": 0.92,
-            "max_rounds": 3,
+            "n_candidates": 12,
+            "tries": 4, 
+            "max_new_tokens": 256,
+            "temperature": 0.8,
+            "top_p": 0.95,
+            "max_rounds": 1,
             "accept_score": 90.0,
         }
 
@@ -109,13 +110,11 @@ def main():
         except Exception as e:
             err = f"APIError: {type(e).__name__}: {e}"
             err_counter["APIError"] += 1
-            results.append({
-                "id": tid,
-                "pass": False,
-                "score": 0.0,
-                "latency_ms": 0.0,
-                "error": err,
-            })
+            res_item = {
+                "id": tid, "pass": False, "score": 0.0, "error": err
+            }
+            results.append(res_item)
+            _append_result(res_item)
             print(f"[{i:02d}/{total:02d}] {tid} -> {err}", flush=True)
             continue
 
@@ -135,25 +134,28 @@ def main():
         fn_env = {}
 
         # --- exec ---
+        err_msg = ""
         try:
             exec(src, fn_env, fn_env)
             fn = fn_env[fname]
         except Exception as e:
-            err = f"ExecError: {type(e).__name__}: {e}"
+            err_msg = f"ExecError: {type(e).__name__}: {e}"
             err_counter["ExecError"] += 1
-            results.append({
+            print(f"\n--- DEBUG EXEC ERROR [{tid}] ---\nRAW_BODY:\n{raw_body!r}\n\nNORMALIZED:\n{body_indented!r}\n\nSRC:\n{src}\n---------------------------------\n")
+
+        if err_msg:
+            res_item = {
                 "id": tid,
                 "pass": False,
                 "score": float(best.get("score", 0.0)),
                 "latency_ms": float(timing.get("t_total_ms", 0.0)),
-                "error": err,
+                "error": err_msg,
                 "reason": best.get("reason", ""),
-                "determinism": float(metrics.get("determinism", 0.0)),
-                "passed": int(metrics.get("passed", 0)),
-                "total": int(metrics.get("total", 0)),
                 "code_full": best.get("code_full", ""),
-            })
-            print(f"[{i:02d}/{total:02d}] {tid} -> {err}", flush=True)
+            }
+            results.append(res_item)
+            _append_result(res_item)
+            print(f"[{i:02d}/{total:02d}] {tid} -> {err_msg}", flush=True)
             continue
 
         # --- checker with timeout ---
@@ -181,21 +183,93 @@ def main():
             item["code_full"] = best.get("code_full", "")
 
         results.append(item)
+        _append_result(item)
 
         extra = f" ERR={err}" if err else ""
         print(f"[{i:02d}/{total:02d}] {tid} -> pass={bool(ok)} score={item['score']:.1f}{extra}", flush=True)
 
-    with open("results.jsonl", "w", encoding="utf-8") as f:
-        for item in results:
+    calculate_metrics(results)
+
+def _append_result(item):
+    try:
+        with open("results.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
-    acc = sum(1 for x in results if x["pass"]) / max(1, len(results))
-    print("Accuracy:", acc)
+def calculate_metrics(results):
+    total = len(results)
+    if total == 0:
+        print("No results to calculate metrics.")
+        return
 
-    if err_counter:
-        print("Error breakdown:")
-        for k, v in err_counter.most_common():
-            print(f"  {k}: {v}")
+    # 1. Confusion Matrix (Assumming all tasks are Positive samples)
+    # TP: Connected proper logic (Pass)
+    # FN: Failed to generate correct logic (Fail)
+    # FP: 0 (No negative samples provided)
+    # TN: 0 (No negative samples provided)
+    
+    tp = sum(1 for r in results if r["pass"])
+    fn = total - tp
+    fp = 0
+    tn = 0
+    
+    # 2. Accuracy
+    # Acc = (TP + TN) / Total
+    accuracy = (tp + tn) / total if total > 0 else 0.0
+
+    # 3. Precision
+    # Prec = TP / (TP + FP)
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # Usually 1.0 here
+
+    # 4. Recall
+    # Rec = TP / (TP + FN)
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0     # Same as Accuracy here
+
+    # 5. F1-Score
+    # F1 = 2 * (P * R) / (P + R)
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    # 6. ROC-AUC
+    # Not applicable for single-class datasets, but requested.
+    roc_auc = "N/A (Dataset has only Positive samples)"
+
+    # Report Dictionary
+    metrics_report = {
+        "type": "all_metrics_summary",
+        "total_samples": total,
+        "confusion_matrix": {
+            "TP": tp, "FN": fn, "FP": fp, "TN": tn
+        },
+        "metrics": {
+            "accuracy": round(accuracy, 4),
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1_score": round(f1, 4),
+            "roc_auc": roc_auc
+        }
+    }
+
+    print("-" * 40)
+    print("THESIS METRICS REPORT")
+    print("-" * 40)
+    print(f"Total Samples  : {total}")
+    print(f"Confusion Matrix: TP={tp}, FN={fn}, FP={fp}, TN={tn}")
+    print("-" * 40)
+    print(f"Accuracy       : {accuracy:.4f}")
+    print(f"Precision      : {precision:.4f}")
+    print(f"Recall         : {recall:.4f}")
+    print(f"F1-Score       : {f1:.4f}")
+    print(f"ROC-AUC        : {roc_auc}")
+    print("-" * 40)
+
+    # Append to results.jsonl
+    try:
+        with open("results.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(metrics_report, ensure_ascii=False) + "\n")
+        print(">> Metrics summary saved to 'results.jsonl'")
+    except Exception as e:
+        print(f"Error saving metrics: {e}")
 
 
 if __name__ == "__main__":

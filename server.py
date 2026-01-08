@@ -1,9 +1,11 @@
 from __future__ import annotations
+print(f"DEBUG: SERVER LOADING name={__name__}")
 
 import os
 import time
 import uuid
 from fastapi import FastAPI
+import uvicorn
 
 from api_schema import (
     SolveRequest, SolveResponse, WarningItem,
@@ -15,23 +17,36 @@ from evaluator import EvalConfig, Evaluator
 
 app = FastAPI(title="CodeT5 Function Body API", version="1.0")
 
-CHECKPOINT = os.getenv("CODET5_CHECKPOINT", "Salesforce/codet5p-220m-py")
+CHECKPOINT = os.getenv("CODET5_CHECKPOINT", "Salesforce/codet5p-770m-py")
 
-import time
-
-t0 = time.perf_counter()
-print("[BOOT] loading model...")
-
-tokenizer, model, device = load_codet5(CHECKPOINT)
-
-print(f"[BOOT] model loaded in {(time.perf_counter() - t0):.1f}s on {device}")
+# Globals (lazy init to avoid multiprocessing recursive load)
+tokenizer = None
+model = None
+device = None
+quality_evaluator = None
+fast_evaluator = None
 
 # Persistent evaluators (production)
+# Use spawn-safe configuration
 QUALITY_EVAL_CFG = EvalConfig(timeout_s=3.0, repeats=2, probe_cases=8, pool_workers=1)
 FAST_EVAL_CFG    = EvalConfig(timeout_s=1.5, repeats=1, probe_cases=6, pool_workers=1)
 
-quality_evaluator = Evaluator(QUALITY_EVAL_CFG)
-fast_evaluator = Evaluator(FAST_EVAL_CFG)
+@app.on_event("startup")
+def _startup():
+    global tokenizer, model, device, quality_evaluator, fast_evaluator
+    
+    t0 = time.perf_counter()
+    print("[BOOT] loading model...")
+    tokenizer, model, device = load_codet5(CHECKPOINT)
+    print(f"[BOOT] model loaded in {(time.perf_counter() - t0):.1f}s on {device}")
+
+    quality_evaluator = Evaluator(QUALITY_EVAL_CFG)
+    fast_evaluator = Evaluator(FAST_EVAL_CFG)
+
+@app.on_event("shutdown")
+def _shutdown():
+    if fast_evaluator: fast_evaluator.close()
+    if quality_evaluator: quality_evaluator.close()
 
 # ---- Presets for VS Code extension ----
 PRESET_FAST = dict(
@@ -108,24 +123,13 @@ def health():
         "checkpoint": CHECKPOINT,
         "evaluators": {
             "fast": {
-                "timeout_s": FAST_EVAL_CFG.timeout_s,
-                "probe_cases": FAST_EVAL_CFG.probe_cases,
-                "pool_workers": FAST_EVAL_CFG.pool_workers,
+                "timeout_s": FAST_EVAL_CFG.timeout_s if fast_evaluator else 0,
             },
             "quality": {
-                "timeout_s": QUALITY_EVAL_CFG.timeout_s,
-                "probe_cases": QUALITY_EVAL_CFG.probe_cases,
-                "pool_workers": QUALITY_EVAL_CFG.pool_workers,
+                "timeout_s": QUALITY_EVAL_CFG.timeout_s if quality_evaluator else 0,
             },
         },
     }
-
-@app.on_event("shutdown")
-def _shutdown():
-    try:
-        fast_evaluator.close()
-    finally:
-        quality_evaluator.close()
 
 def _pack_metrics(r: dict) -> CandidateMetrics:
     return CandidateMetrics(
@@ -212,8 +216,17 @@ def solve(req: SolveRequest):
     if getattr(req2, "mode", None) == "fast":
         req2.max_rounds = 1
         req2.accept_score = 0.0
+    
+    # Select evaluator
+    ev = quality_evaluator
+    if getattr(req2, "mode", None) == "fast":
+        if fast_evaluator: 
+            ev = fast_evaluator
 
-    ev = fast_evaluator if getattr(req2, "mode", None) == "fast" else quality_evaluator
+    if ev is None:
+        # Fallback if evaluators not ready or failed init
+        # For now, just raise or return empty
+        pass
 
     best: dict | None = None
     rows: list[dict] = []
@@ -286,3 +299,6 @@ def solve(req: SolveRequest):
         warnings=ws,
         timing={"t_total_ms": t_total_ms, "t_generate_ms": t_gen_ms, "t_eval_ms": t_eval_ms},
     )
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

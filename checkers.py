@@ -62,3 +62,34 @@ def abs_v1(fn):
 
 def pow2_v1(fn):
     return fn(0)==1 and fn(3)==8
+
+def c_to_f_v1(fn):
+    val = fn(100)
+    return abs(val-212)<0.1
+
+def is_leap_v1(fn):
+    return fn(2020) is True and fn(2019) is False
+
+def count_vowels_v1(fn):
+    return fn("hello")==2 and fn("sky")==0
+
+def last_el_v1(fn):
+    return fn([1,2,3])==3 and fn([10])==10
+
+def sqrt_int_v1(fn):
+    return fn(4)==2 and fn(9)==3 and fn(10)==3
+
+def xor_v1(fn):
+    return fn(True, False) is True and fn(True, True) is False
+
+def prod_v1(fn):
+    return fn([1,2,3])==6 and fn([5,5])==25
+
+def remove_digits_v1(fn):
+    return fn("abc123def")=="abcdef"
+
+def second_largest_v1(fn):
+    return fn([1,5,3,4])==4
+
+def anagram_v1(fn):
+    return fn("listen", "silent") is True and fn("hello", "world") is False

@@ -57,9 +57,25 @@ def solve_quadratic(a, b, c):
         return solutions
 def is_prime(n: int) -> bool:
     """Return True if n is a prime number, False otherwise."""
-        if n == 2 or n == 3:
-            return True
-        for i in range(2, int(n ** 0.5)):
+        if n < 2:
+            return False
+
+        for i in range(2, int((n**0.5)+1)):
+            if (n % i) == 0:
+                return False
+
+        # This is the only way to check that a prime number is not prime as long as
+        # it is evenly divisible by any other value. See below:
+        return True
+
+def is_prime(n: int) -> bool:
+    """Return True if n is a prime number, False otherwise."""
+        if n == 1:
+            return False  # no prime number.
+
+        for i in range(2, int((n ** 0.5) + 1)):
+
             if n % i == 0:
                 return False
-        return True
+
+        return True   # all integers are primes.

@@ -1,0 +1,33 @@
+DEBUG: SERVER LOADING name=__main__
+C:\AI_Goat\AI_Goat\AI_Goat\server.py:34: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+C:\AI_Goat\AI_Goat\AI_Goat\server.py:46: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
+INFO:     Started server process [21108]
+INFO:     Waiting for application startup.
+[BOOT] loading model...
+DEBUG: torch version=2.5.1+cu121 cuda_available=True
+DEBUG: Python Executable: C:\AI_Goat\AI_Goat\AI_Goat\venv\Scripts\python.exe
+DEBUG: Selected device=cuda
+[BOOT] model loaded in 4.2s on cuda
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:50206 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50211 - "POST /v1/solve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50216 - "POST /v1/solve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50220 - "POST /v1/solve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50224 - "POST /v1/solve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50246 - "POST /v1/solve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51618 - "POST /v1/solve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51624 - "POST /v1/solve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51632 - "POST /v1/solve HTTP/1.1" 200 OK

@@ -156,6 +156,7 @@ async function callSolveApi(
   timeoutMs: number
 ): Promise<SolveResponse> {
   const controller = new AbortController();
+  
   const t = setTimeout(() => controller.abort(), timeoutMs);
 
   try {

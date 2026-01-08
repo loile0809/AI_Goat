@@ -206,11 +206,34 @@ def _sanity_check_output(out: Any) -> float:
 
     return penalty
 
+def _check_docstring_consistency(docstring: str, out: Any) -> float:
+    """
+    Heuristic: if docstring implies a scalar (sum, count), but output is container, penalize.
+    """
+    if not docstring or not out:
+        return 0.0
+    
+    ds = docstring.lower()
+    # Terms implying scalar number
+    scalar_terms = ["return the sum", "returns the sum", "return the count", "returns the number", "return the product", "calculate the sum"]
+    
+    if any(t in ds for t in scalar_terms):
+        # Expect int/float
+        if not isinstance(out, (int, float)):
+            # If it's a tuple/list, heavy penalty
+            if isinstance(out, (list, tuple, dict, set)):
+                return 25.0
+            # If string/bool, smaller penalty
+            return 10.0
+            
+    return 0.0
+
+
 # -----------------------
 # worker (runs INSIDE pool)
 # -----------------------
 
-def _worker_eval(func_code: str, func_name: str, probes: List[Tuple[List[Any], Dict[str, Any]]], repeats: int):
+def _worker_eval(func_code: str, func_name: str, probes: List[Tuple[List[Any], Dict[str, Any]]], repeats: int, docstring: str = ""):
     t0 = time.perf_counter()
     penalty = 0.0
     try:
@@ -224,7 +247,7 @@ def _worker_eval(func_code: str, func_name: str, probes: List[Tuple[List[Any], D
             "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict, "enumerate": enumerate,
             "float": float, "int": int, "len": len, "list": list, "max": max, "min": min, "range": range,
             "reversed": reversed, "set": set, "sorted": sorted, "str": str, "sum": sum, "tuple": tuple, "zip": zip,
-            "map": map, "filter": filter,  # ✅ add (common in generated code)
+            "map": map, "filter": filter,  # add (common in generated code)
         }
         env: Dict[str, Any] = {"__builtins__": safe_builtins}
         exec(compiled, env, env)
@@ -266,6 +289,7 @@ def _worker_eval(func_code: str, func_name: str, probes: List[Tuple[List[Any], D
                 try:
                     out0 = fn(*a0, **k0)
                     penalty += _sanity_check_output(out0)
+                    penalty += _check_docstring_consistency(docstring, out0)
                     outs.append(repr(out0))
                 except Exception as e:
                     outs.append(f"EXC:{type(e).__name__}")
@@ -299,8 +323,18 @@ def _worker_eval(func_code: str, func_name: str, probes: List[Tuple[List[Any], D
 class Evaluator:
     def __init__(self, cfg: EvalConfig):
         self.cfg = cfg
-        ctx = mp.get_context(cfg.mp_start_method)
-        self.pool = ctx.Pool(processes=cfg.pool_workers, maxtasksperchild=200)
+        self._reset_pool()
+
+    def _reset_pool(self):
+        if hasattr(self, "pool") and self.pool:
+            try:
+                self.pool.terminate()
+                self.pool.join()
+            except Exception:
+                pass
+        
+        ctx = mp.get_context(self.cfg.mp_start_method)
+        self.pool = ctx.Pool(processes=self.cfg.pool_workers, maxtasksperchild=200)
 
     def close(self):
         try:
@@ -324,13 +358,18 @@ class Evaluator:
                     "determinism": 0.0, "avg_ms": 0.0, "length_chars": length_chars, "code": code}
 
         probes = build_probe_cases(signature, self.cfg.probe_cases)
-        ar = self.pool.apply_async(_worker_eval, (code, func_name, probes, self.cfg.repeats))
+        ar = self.pool.apply_async(_worker_eval, (code, func_name, probes, self.cfg.repeats, docstring))
 
         try:
             r = ar.get(timeout=self.cfg.timeout_s)
         except mp.TimeoutError:
+            self._reset_pool()
             return {"compile_ok": True, "passed": 0, "total": len(probes), "score": 0.0, "reason": "timeout",
                     "determinism": 0.0, "avg_ms": self.cfg.timeout_s * 1000.0, "length_chars": length_chars, "code": code}
+        except Exception as e:
+            err_str = f"WorkerError:{type(e).__name__}:{e}"
+            return {"compile_ok": False, "passed": 0, "total": len(probes), "score": 0.0, "reason": err_str,
+                    "determinism": 0.0, "avg_ms": 0.0, "length_chars": length_chars, "code": code}
 
         if not r.get("compile_ok", False):
             return {"compile_ok": False, "passed": 0, "total": len(probes), "score": 0.0, "reason": "compile_fail",
@@ -371,6 +410,25 @@ class Evaluator:
                 constant_penalty = 15.0
 
         score -= constant_penalty
+
+        # identity penalty (heuristic: if all outputs == input[0], likely trivial return n)
+        identity_penalty = 0.0
+        if ok_probe_outs and len(probes) == total:
+            is_identity = True
+            for i, (args, kwargs) in enumerate(probes):
+                if len(args) >= 1 and not kwargs:
+                    if repr(args[0]) != probe_outs[i]:
+                        is_identity = False
+                        break
+                else:
+                    is_identity = False
+                    break
+            
+            if is_identity:
+                identity_penalty = 15.0
+        
+        score -= identity_penalty
+
         score = max(0.0, min(100.0, score))
 
         reason = "ok" if passed == total and determinism >= 1.0 else ("partial_runtime" if passed < total else "nondeterministic")

@@ -11,7 +11,11 @@ BAD_PATTERNS = [
     r"\bos\.system\b",
     r"\bsubprocess\b",
     r"\byield\b",           # no generator
-    r"\bsum\s*\(\s*\[",     # sum([ ... ]) -> waste memory, prefer sum(...)
+    r"\byield\b",           # no generator
+    r"^\s*//",              # C-style comments
+    r"@interface",          # Obj-C
+    r"#import\s+<",         # C/Obj-C include
+    r"#include\s+<",        # C include
 ]
 
 
@@ -22,19 +26,31 @@ def _strip_fences(s: str) -> str:
 def _extract_body(text: str) -> str:
     text = _strip_fences(text)
 
-    if "if __name__" in text:
-        text = text.split("if __name__")[0]
-
-    # cut after first def header if present
+    # If the model repeats the signature (rare in Seq2Seq but possible), cut it
     m = re.search(r"def\s+\w+\s*\(.*?\)\s*:\s*\n", text)
     if m:
         text = text[m.end():]
 
-    # stop before next top-level def/class
-    text = re.split(r"\n(?=(def|class)\s+\w+)", text)[0]
+    # Cut at common stop boundaries
+    # Stop at next function/class definition
+    text = re.split(r"\n\s*(def|class|@)\s+\w+", text)[0]
+    
+    # Stop at if __name__ == "__main__":
+    text = text.split('if __name__')[0]
+
+    # Stop at common garbage lines seen in CodeT5 benchmarks
+    garbage_markers = [
+        "\n# pylint:", "\n# pragma:", "\n# NOQA", 
+        "\ndef test_", "\nclass Test", 
+        "\nprint(", "\nassert ",
+    ]
+    for marker in garbage_markers:
+        if marker in text:
+            text = text.split(marker)[0]
 
     # drop leading docstring echoes
     text = re.sub(r'^\s*""".*?"""\s*', "", text, flags=re.DOTALL)
+    text = re.sub(r"^\s*'''.*?'''\s*", "", text, flags=re.DOTALL)
 
     # trim blank lines
     lines = text.splitlines()
@@ -58,17 +74,22 @@ def generate_function_bodies(
     device,
     code_prefix: str,
     n: int = 16,
-    max_new_tokens: int = 160,
-    temperature: float = 0.9,
+    max_new_tokens: int = 200,
+    temperature: float = 0.65, # Lower temp for stability
     top_p: float = 0.95,
     tries: int = 3,
 ):
     if not code_prefix.endswith("\n"):
         code_prefix += "\n"
 
+    # CodeT5 is a Seq2Seq model. It generates the target sequence (body) directly.
+    # However, sometimes it generates garbage if not constrained.
+    
     candidates = []
     for _ in range(tries):
-        enc = tokenizer(code_prefix, return_tensors="pt", truncation=True, max_length=256).to(device)
+        enc = tokenizer(code_prefix, return_tensors="pt", truncation=True, max_length=512).to(device)
+        
+        # 770M model fits in memory, no batching needed
         outs = model.generate(
             **enc,
             max_new_tokens=max_new_tokens,
@@ -76,12 +97,14 @@ def generate_function_bodies(
             temperature=temperature,
             top_p=top_p,
             num_return_sequences=n,
-            repetition_penalty=1.1,
+            repetition_penalty=1.2,
+            pad_token_id=tokenizer.eos_token_id,
         )
+        
         for o in outs:
             txt = tokenizer.decode(o, skip_special_tokens=True)
             body = _extract_body(txt)
-            if not _is_bad(body):
+            if not _is_bad(body) and body.strip():
                 candidates.append(body)
 
     uniq, seen = [], set()
